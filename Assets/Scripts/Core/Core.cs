@@ -17,7 +17,7 @@ public class Core
     public Player PlayerShip;
     public ObjectTransform EnemyShip;
     public List<Bullet> Bullets;
-    public List<ObjectTransform> SmallAsteroids;
+    public List<Asteroid> Asteroids;
     public List<ObjectTransform> BigAsteroids;
 
     //-------------------------------
@@ -37,7 +37,7 @@ public class Core
     public event DeadBullet OnDeadBullet;
 
     public delegate void NewAsteroid(bool Big);
-    public delegate void DeadAsteroid(bool Big, int i);
+    public delegate void DeadAsteroid(int i);
     public event NewAsteroid OnNewAsteroid;
     public event DeadAsteroid OnDeadAsteroid;
 
@@ -46,11 +46,11 @@ public class Core
     {
         Active = true;
         PlayerShip = new Player(new Vector2(500,500), 0);
-        SmallAsteroids = new List<ObjectTransform>();
+        Asteroids = new List<Asteroid>();
         BigAsteroids = new List<ObjectTransform>();
         Bullets = new List<Bullet>(); 
         
-        SpawnNewAsteroid();
+        SpawnAsteroids();
     }
 
     //Game tick, like Update()
@@ -64,7 +64,7 @@ public class Core
 
         //Simple timers
         if (LevelTime % 2 <= 0.02f)
-            SpawnNewAsteroid();
+            SpawnAsteroids();
         if (LevelTime % 10 <= 0.02f)
             SpawnNewEnemyShip();
 
@@ -83,15 +83,15 @@ public class Core
     }
 
     //main spawn new asteroids Functions
-    void SpawnNewAsteroid()
+    void SpawnAsteroids()
     {
         if (Random.Range(0, 100) < 50)
         {
-            SpawnNewSmallAsteroid();
+            SpawnNewAsteroid(false);
         }
         else
         {
-            SpawnNewBigAsteroid();
+            SpawnNewAsteroid(true);
         }
     }
     //main spawn EnemyShip Functions
@@ -141,21 +141,12 @@ public class Core
             OnDeadEnemy?.Invoke();
         }
 
-        for (int i = 0; i < BigAsteroids.Count; i++)
+        for (int i = 0; i < Asteroids.Count; i++)
         {
-            Debug.Log(FindNearestPointOnLine(PlayerShip.GetPosition(), PlayerShip.GetPosition() + PlayerShip.GetDirection() * 1000, BigAsteroids[i].GetPosition()));
-            if (FindNearestPointOnLine(PlayerShip.GetPosition(), PlayerShip.GetPosition() + PlayerShip.GetDirection() * 1000, BigAsteroids[i].GetPosition()) < LaserAngle)
+            Debug.Log(FindNearestPointOnLine(PlayerShip.GetPosition(), PlayerShip.GetPosition() + PlayerShip.GetDirection() * 1000, Asteroids[i].GetPosition()));
+            if (FindNearestPointOnLine(PlayerShip.GetPosition(), PlayerShip.GetPosition() + PlayerShip.GetDirection() * 1000, Asteroids[i].GetPosition()) < LaserAngle)
             {
-                DestroyBigAsteroid(i);
-                i--;
-            }
-        }
-        for (int i = 0; i < SmallAsteroids.Count; i++)
-        {
-            Debug.Log(FindNearestPointOnLine(PlayerShip.GetPosition(), PlayerShip.GetPosition() + PlayerShip.GetDirection() * 1000, SmallAsteroids[i].GetPosition()));
-            if (FindNearestPointOnLine(PlayerShip.GetPosition(), PlayerShip.GetPosition() + PlayerShip.GetDirection() * 1000, SmallAsteroids[i].GetPosition()) < LaserAngle)
-            {
-                DestroySmallAsteroid(i);
+                DestroyAsteroid(i);
                 i--;
             }
         }
@@ -176,54 +167,37 @@ public class Core
 
 
     //spawn new asteroids subFunctions
-    void SpawnNewSmallAsteroid()
+    void SpawnNewAsteroid(bool Big)
     {
-        ObjectTransform newAsteroid = new ObjectTransform(new Vector2(
+        float spd = Big ? Random.Range(10, 30) : Random.Range(30, 50);
+        Asteroid newAsteroid = new Asteroid(new Vector2(
             Random.Range(-20, 1020), 1000),
-            Random.Range(0, 360), 
-            Random.Range(30, 50)
+            Random.Range(0, 360),
+            spd,
+            Big
             );
-        SmallAsteroids.Add(newAsteroid);
-        OnNewAsteroid?.Invoke(false);
+        Asteroids.Add(newAsteroid);
+        OnNewAsteroid?.Invoke(Big);
     }
-    void SpawnNewSmallAsteroid(Vector2 pos)
+    void SpawnNewAsteroid(bool Big, Vector2 pos)
     {
-        ObjectTransform newAsteroid = new ObjectTransform(
+        float spd = Big ? Random.Range(10, 30) : Random.Range(30, 50);
+        Asteroid newAsteroid = new Asteroid(
             pos, 
-            Random.Range(0, 360), 
-            Random.Range(30, 50)
+            Random.Range(0, 360),
+            spd,
+            Big
             );
-        SmallAsteroids.Add(newAsteroid);
-        OnNewAsteroid?.Invoke(false);
-    }
-    void SpawnNewBigAsteroid()
-    {
-        ObjectTransform newAsteroid = new ObjectTransform(
-            new Vector2(Random.Range(-20, 1020), 1000), 
-            Random.Range(0, 360), 
-            Random.Range(10, 30)
-            );
-        BigAsteroids.Add(newAsteroid);
-        OnNewAsteroid?.Invoke(true);
+        Asteroids.Add(newAsteroid);
+        OnNewAsteroid?.Invoke(Big);
     }
 
     //destroy asteroid with i Id
-    void DestroySmallAsteroid(int i)
+    void DestroyAsteroid(int i)
     {
         Score += 10;
-        SmallAsteroids.RemoveAt(i);
-        OnDeadAsteroid?.Invoke(false, i);
-    }
-    void DestroyBigAsteroid(int i)
-    {
-        Score += 5;
-        for (int c = 0; c < Random.Range(2, 5); c++)
-        {
-            SpawnNewSmallAsteroid(BigAsteroids[i].GetPosition());
-        }
-
-        BigAsteroids.RemoveAt(i);
-        OnDeadAsteroid?.Invoke(true, i);
+        OnDeadAsteroid?.Invoke(i);
+        Asteroids.RemoveAt(i);
     }
 
 
@@ -268,60 +242,40 @@ public class Core
                 continue;
             }
 
-            //Check distances to Small Asteroids
-            for (int a = 0; a < SmallAsteroids.Count; a++)
+            //Check distances to Asteroids
+            for (int a = 0; a < Asteroids.Count; a++)
             {
-                if(Vector3.Distance(Bullets[i].GetPosition(), SmallAsteroids[a].GetPosition()) < 20)
+                float range = Asteroids[a].BigAsteroid ? 20 : 40;
+                if (Vector3.Distance(Bullets[i].GetPosition(), Asteroids[a].GetPosition()) < range)
                 {
+                    Debug.Log(Asteroids[a].BigAsteroid);
+                    if (Asteroids[a].BigAsteroid)
+                    {
+                        SpawnNewAsteroid(false, Asteroids[a].GetPosition());
+                        SpawnNewAsteroid(false, Asteroids[a].GetPosition());
+                        SpawnNewAsteroid(false, Asteroids[a].GetPosition());
+                    }
+
                     Bullets.RemoveAt(i);
                     OnDeadBullet?.Invoke(i);
                     i--;
-                    DestroySmallAsteroid(a);
+                    DestroyAsteroid(a);
                     break;
                 }
             }
-
-            if (i < 0) continue;
-
-            //Check distances to Big Asteroids
-            for (int a = 0; a < BigAsteroids.Count; a++)
-            {
-                if(Vector3.Distance(Bullets[i].GetPosition(), BigAsteroids[a].GetPosition()) < 30)
-                {
-                    Bullets.RemoveAt(i);
-                    OnDeadBullet?.Invoke(i);
-                    i--;
-                    DestroyBigAsteroid(a);
-                    break;
-                }
-            }
-
         }
     }
     void UpdateAsteroids()
     {
         //Update position foreach Small Asteroid and check distances to Player ship
-        for (int i = 0; i < SmallAsteroids.Count; i++)
+        for (int i = 0; i < Asteroids.Count; i++)
         {
-            SmallAsteroids[i].UpdatePos(); 
-            if (Vector3.Distance(PlayerShip.GetPosition(), SmallAsteroids[i].GetPosition()) < 30)
+            Asteroids[i].UpdatePos();
+            float range = Asteroids[i].BigAsteroid ? 20 : 40;
+            if (Vector3.Distance(PlayerShip.GetPosition(), Asteroids[i].GetPosition()) < range)
             {
-                SmallAsteroids.RemoveAt(i);
-                OnDeadAsteroid?.Invoke(false, i);
-
-                if (PlayerShip.DeadCrash())
-                    GameEnd();
-                break;
-            }
-        }
-        //Update position foreach Big Asteroid and check distances to Player ship
-        for (int i = 0; i < BigAsteroids.Count; i++)
-        {
-            BigAsteroids[i].UpdatePos();
-            if (Vector3.Distance(PlayerShip.GetPosition(), BigAsteroids[i].GetPosition()) < 50)
-            {
-                BigAsteroids.RemoveAt(i);
-                OnDeadAsteroid?.Invoke(true, i);
+                Asteroids.RemoveAt(i);
+                OnDeadAsteroid?.Invoke(i);
 
                 if (PlayerShip.DeadCrash())
                     GameEnd();

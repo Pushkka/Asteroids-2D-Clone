@@ -28,9 +28,8 @@ public class GameManager : MonoBehaviour
     //-------------------------------
     [Header("Other Game Objects")]
     private Transform EnemyShipPos;
-    private List<Transform> BulletsPos;
-    private List<Transform> SmallAsteroidsPos;
-    private List<Transform> BigAsteroidsPos;
+    private List<Transform> BulletsPos = new List<Transform>();
+    private List<Transform> AsteroidsPos = new List<Transform>();
 
     public void StartNewGame()
     {
@@ -42,14 +41,11 @@ public class GameManager : MonoBehaviour
             Destroy(EnemyShipPos.gameObject);
         foreach (var item in BulletsPos)
             Destroy(item.gameObject);
-        foreach (var item in SmallAsteroidsPos)
-            Destroy(item.gameObject);
-        foreach (var item in BigAsteroidsPos)
+        foreach (var item in AsteroidsPos)
             Destroy(item.gameObject);
 
         BulletsPos.Clear();
-        SmallAsteroidsPos.Clear();
-        BigAsteroidsPos.Clear();
+        AsteroidsPos.Clear();
         EndScreen.SetActive(false);
 
         //Subscribe on Game Invokes
@@ -95,18 +91,11 @@ public class GameManager : MonoBehaviour
             //    BulletsPos[i].GetComponent<Image>().color = Color.red;
         }
 
-        //Set Small Asteroids position
-        for (int i = 0; i < SmallAsteroidsPos.Count; i++)
+        //Set Asteroids position
+        for (int i = 0; i < AsteroidsPos.Count; i++)
         {
-            SmallAsteroidsPos[i].position = Game.SmallAsteroids[i].GetPosition();
-            SmallAsteroidsPos[i].rotation = Quaternion.Euler(0, 0, Game.SmallAsteroids[i].GetRotation());
-        }
-
-        //Set Big Asteroids position
-        for (int i = 0; i < BigAsteroidsPos.Count; i++)
-        {
-            BigAsteroidsPos[i].position = Game.BigAsteroids[i].GetPosition();
-            BigAsteroidsPos[i].rotation = Quaternion.Euler(0, 0, Game.BigAsteroids[i].GetRotation());
+            AsteroidsPos[i].position = Game.Asteroids[i].GetPosition();
+            AsteroidsPos[i].rotation = Quaternion.Euler(0, 0, Game.Asteroids[i].GetRotation());
         }
     }
 
@@ -162,32 +151,24 @@ public class GameManager : MonoBehaviour
 
     private void Game_OnNewAsteroid(bool Big)
     {
+        GameObject NewAsteroid;
         if (Big)
         {
             Debug.Log("New Big Asteroid");
-            GameObject NewAsteroid = Instantiate(BigAsteroidPref, transform);
-            BigAsteroidsPos.Add(NewAsteroid.transform);
+            NewAsteroid = Instantiate(BigAsteroidPref, transform);
         }
         else
         {
             Debug.Log("New Small Asteroid");
-            GameObject NewAsteroid = Instantiate(SmallAsteroidPref, transform);
-            SmallAsteroidsPos.Add(NewAsteroid.transform);
+            NewAsteroid = Instantiate(SmallAsteroidPref, transform);
         }
+
+        AsteroidsPos.Add(NewAsteroid.transform);
     }
-    private void Game_OnDeadAsteroid(bool Big, int id)
+    private void Game_OnDeadAsteroid(int id)
     {
-        if (Big)
-        {
-            Debug.Log("Destroyed Big Asteroid");
-            Destroy(BigAsteroidsPos[id].gameObject);
-            BigAsteroidsPos.RemoveAt(id);
-        }
-        else
-        {
-            Debug.Log("Destroyed Small Asteroid");
-            Destroy(SmallAsteroidsPos[id].gameObject);
-            SmallAsteroidsPos.RemoveAt(id);
-        }
+        Debug.Log("Asteroid Destroyed");
+        Destroy(AsteroidsPos[id].gameObject);
+        AsteroidsPos.RemoveAt(id);
     }
 }
