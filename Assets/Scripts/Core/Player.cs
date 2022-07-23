@@ -2,12 +2,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Player : ObjectTransform
+[System.Serializable]
+public class Player : ObjectRigidbody
 {
-    public Player(Vector2 pos, float rot) : base(pos, rot)
-    {
-
-    }
+    public Player(Vector2 pos, float rot) : base(pos, rot) { }
 
     public int Health = 3;
 
@@ -17,7 +15,38 @@ public class Player : ObjectTransform
     public int LaserCount = 3;
     public float LaserReload = 20;
 
-    public void DecreaceDelay(float DeltaTime)
+    public delegate void ShotEvent();
+    public event ShotEvent OnShot;
+    public event ShotEvent OnLaserShot;
+    public void Update()
+    {
+        Vector2 Input = PlayerInput.GetMovementInput();
+        AddSpeed(Input.x);
+        AddRotation(Input.y * 3);
+        UpdatePosition();
+
+        //Decreace Ship Reload Timers
+        DecreaceDelay(0.02f);
+
+        if (PlayerInput.IsShoot() && ShotDelay <= 0)
+        {
+            Shot();
+        }
+        if (PlayerInput.IsLaserShoot() && LaserDelay <= 0)
+        {
+            ShotLaser();
+        }
+    }
+    public bool DeadCrash()
+    {
+        Health--;
+        if (Health <= 0)
+            return true;
+        else
+            return false;
+    }
+
+    private void DecreaceDelay(float DeltaTime)
     {
         if(ShotDelay > 0)
             ShotDelay -= DeltaTime;
@@ -34,21 +63,16 @@ public class Player : ObjectTransform
             LaserReload = 20;
         }
     }
-    public void Shot()
+    private void Shot()
     {
         ShotDelay = 0.25f;
+        OnShot?.Invoke();
     }
-    public void ShotLaser()
+    private void ShotLaser()
     {
         LaserCount -= 1;
         LaserDelay = 3;
-    }
-    public bool DeadCrash()
-    {
-        Health--;
-        if (Health <= 0)
-            return true;
-        else
-            return false;
+
+        OnLaserShot?.Invoke();
     }
 }

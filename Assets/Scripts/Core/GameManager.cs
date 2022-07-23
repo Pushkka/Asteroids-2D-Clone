@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 public class GameManager : MonoBehaviour
 {
-    public Core Game = null;
+    private Simulation Game = null;
 
     [Header("UI")]
     public Text Position;
@@ -20,6 +20,7 @@ public class GameManager : MonoBehaviour
     public GameObject EnemyShip;
     public GameObject LaserPref;
     public GameObject BulletPref;
+    public GameObject DeadSmallAsteroidPref;
     public GameObject SmallAsteroidPref;
     public GameObject BigAsteroidPref;
 
@@ -33,10 +34,8 @@ public class GameManager : MonoBehaviour
 
     public void StartNewGame()
     {
-        //Create new Core
-        Game = new Core();
+        Game = new Simulation();
 
-        //Destroy old objects
         if (EnemyShipPos)
             Destroy(EnemyShipPos.gameObject);
         foreach (var item in BulletsPos)
@@ -48,50 +47,42 @@ public class GameManager : MonoBehaviour
         AsteroidsPos.Clear();
         EndScreen.SetActive(false);
 
-        //Subscribe on Game Invokes
-        Game.OnNewEnemy += Game_OnNewEnemy;
-        Game.OnDeadEnemy += Game_OnDeadEnemy;
-        Game.OnNewBullet += Game_OnNewBullet;
-        Game.OnNewLaser += Game_OnNewLaser; ;
-        Game.OnDeadBullet += Game_OnDeadBullet;
-        Game.OnNewAsteroid += Game_OnNewAsteroid;
-        Game.OnDeadAsteroid += Game_OnDeadAsteroid;
-        Game.OnGameUi += Game_OnGameUi;
-
         Game.GameStart();
+
+        //Subscribe on Game Invokes
+        Game.OnGameUi += OnGameUi;
+        Game.OnNewEnemy += OnNewEnemy;
+        Game.OnDeadEnemy += OnDeadEnemy;
+        Game.OnDeadBullet += OnDeadBullet;
+        Game.OnNewAsteroid += OnNewAsteroid;
+        Game.OnDeadAsteroid += OnDeadAsteroid;
+        Game.PlayerShip.OnShot += OnNewBullet;
+        Game.PlayerShip.OnLaserShot += OnNewLaser;
     }
     void FixedUpdate()
     {
-        //Check Game Core
         if (Game == null)
             return;
-
-        //Apply game tick
+        
         Game.GameTick(Time.fixedDeltaTime);
 
-        //Set Player ship position
+        //Выставить позицию своего корабля
         PlayerShip.position = Game.PlayerShip.GetPosition();
         PlayerShip.rotation = Quaternion.Euler(0, 0, Game.PlayerShip.GetRotation());
 
-        //Set Enemy ship position
+        //Выставить позицию вражесского корабля
         if (EnemyShipPos && Game.EnemyShip != null)
             EnemyShipPos.position = Game.EnemyShip.GetPosition();
 
 
-        //Set Bullets position
+        //Выставить позицию каждой пуле
         for (int i = 0; i < BulletsPos.Count; i++)
         {
             BulletsPos[i].position = Game.Bullets[i].GetPosition();
             BulletsPos[i].rotation = Quaternion.Euler(0, 0, Game.Bullets[i].GetRotation());
-
-            //NEXT UPDATE SPOILERS
-            //if (Game.Bullets[i].MyBullet)
-            //    BulletsPos[i].GetComponent<Image>().color = Color.white;
-            //else
-            //    BulletsPos[i].GetComponent<Image>().color = Color.red;
         }
 
-        //Set Asteroids position
+        //Выставить позицию каждому астероиду
         for (int i = 0; i < AsteroidsPos.Count; i++)
         {
             AsteroidsPos[i].position = Game.Asteroids[i].GetPosition();
@@ -102,16 +93,16 @@ public class GameManager : MonoBehaviour
     //-------------------------------
     // Invokes
     //-------------------------------
-    private void Game_OnNewLaser()
+    private void OnNewLaser()
     {
         GameObject NewLaser = Instantiate(LaserPref, transform);
         NewLaser.transform.position = PlayerShip.position;
         NewLaser.transform.rotation = PlayerShip.rotation;
     }
 
-    private void Game_OnGameUi(int score, Vector2 pos, float rot, float spd, int health, int lasershots, float laserDelay, bool GameActive)
+    private void OnGameUi(int score, Vector2 pos, float rot, float spd, int health, int lasershots, float laserDelay, bool GameActive)
     {
-        Position.text = $"Pos: {pos.x.ToString("0000")} : {pos.y.ToString("0000")}  Rot: {Mathf.Round(rot)}  Spd: {Mathf.Round(spd)}";
+        Position.text = $"Pos: {pos.x.ToString("0000")} : {pos.y.ToString("0000")}  Rot: {rot.ToString("000")}  Spd: {Mathf.Round(spd)}";
         Score.text = $"SCORE: {score}\nHEALTH: {health}\nLASERS: {lasershots}\nLASER RELOAD: {Mathf.Round(laserDelay)}";
 
         if (!GameActive)
@@ -123,33 +114,33 @@ public class GameManager : MonoBehaviour
 
     }
 
-    private void Game_OnNewEnemy()
+    private void OnNewEnemy()
     {
         Debug.Log("New Enemy Ship");
 
         EnemyShipPos = Instantiate(EnemyShip, transform).transform;
     }
-    private void Game_OnDeadEnemy()
+    private void OnDeadEnemy()
     {
-        Debug.Log("Destroy Enemy Ship");
+        Debug.Log("Destroyed Enemy Ship");
 
         Destroy(EnemyShipPos.gameObject);
     }
 
-    private void Game_OnNewBullet()
+    private void OnNewBullet()
     {
         Debug.Log("New Bullet");
         GameObject NewBullet;
         NewBullet = Instantiate(BulletPref, transform);
         BulletsPos.Add(NewBullet.transform);
     }
-    private void Game_OnDeadBullet(int id)
+    private void OnDeadBullet(int id)
     {
         Destroy(BulletsPos[id].gameObject);
         BulletsPos.RemoveAt(id);
     }
 
-    private void Game_OnNewAsteroid(bool Big)
+    private void OnNewAsteroid(bool Big)
     {
         GameObject NewAsteroid;
         if (Big)
@@ -165,9 +156,13 @@ public class GameManager : MonoBehaviour
 
         AsteroidsPos.Add(NewAsteroid.transform);
     }
-    private void Game_OnDeadAsteroid(int id)
+    private void OnDeadAsteroid(int id)
     {
         Debug.Log("Asteroid Destroyed");
+        GameObject DeadAsteroid = Instantiate(DeadSmallAsteroidPref, transform);
+        DeadAsteroid.transform.position = AsteroidsPos[id].position;
+        DeadAsteroid.transform.rotation = AsteroidsPos[id].rotation;
+
         Destroy(AsteroidsPos[id].gameObject);
         AsteroidsPos.RemoveAt(id);
     }

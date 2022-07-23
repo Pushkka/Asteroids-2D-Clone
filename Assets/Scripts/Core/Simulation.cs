@@ -2,7 +2,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Core
+[System.Serializable]
+public class Simulation
 {
     //-------------------------------
     // Game Stats
@@ -14,11 +15,10 @@ public class Core
     //-------------------------------
     // Game Objects
     //-------------------------------
-    public Player PlayerShip;
-    public ObjectTransform EnemyShip;
+    public Player PlayerShip = new Player(new Vector2(500,500), 0);
+    public Enemy EnemyShip;
     public List<Bullet> Bullets;
     public List<Asteroid> Asteroids;
-    public List<ObjectTransform> BigAsteroids;
 
     //-------------------------------
     // Invokes for UI updates
@@ -30,10 +30,7 @@ public class Core
     public event NewEnemy OnNewEnemy;
     public event NewEnemy OnDeadEnemy;
 
-    public delegate void NewBullet();
     public delegate void DeadBullet(int i);
-    public event NewBullet OnNewLaser;
-    public event NewBullet OnNewBullet;
     public event DeadBullet OnDeadBullet;
 
     public delegate void NewAsteroid(bool Big);
@@ -41,49 +38,48 @@ public class Core
     public event NewAsteroid OnNewAsteroid;
     public event DeadAsteroid OnDeadAsteroid;
 
-    //like Start()
     public void GameStart()
     {
         Active = true;
         PlayerShip = new Player(new Vector2(500,500), 0);
         Asteroids = new List<Asteroid>();
-        BigAsteroids = new List<ObjectTransform>();
-        Bullets = new List<Bullet>(); 
-        
-        SpawnAsteroids();
-    }
+        Bullets = new List<Bullet>();
 
-    //Game tick, like Update()
+        PlayerShip.OnShot += SpawnNewBullet;
+        PlayerShip.OnLaserShot += SpawnLaser;
+    }
     public void GameTick(float DeltaTime)
     {
         if (!Active)
             return;
 
-        //Increace Level Time
+        //Увеличивает время уровня
         LevelTime += DeltaTime;
 
-        //Simple timers
+        //Простенькие таймеры на спавн Астероидов и летающих тарелок
         if (LevelTime % 2 <= 0.02f)
             SpawnAsteroids();
         if (LevelTime % 10 <= 0.02f)
             SpawnNewEnemyShip();
 
-        //subUpdates for some objects
-        UpdatePlayer(DeltaTime);
+        PlayerShip.Update();
         UpdateBullets();
         UpdateAsteroids();
-        UpdateEnemyShip(DeltaTime);
+        UpdateEnemyShip();
 
-        //Game UI Invoke
-        OnGameUi?.Invoke(Score, PlayerShip.GetPosition(), PlayerShip.GetRotation(), PlayerShip.Move.magnitude, PlayerShip.Health, PlayerShip.LaserCount, PlayerShip.LaserReload, Active);
+        //Инвок для интерфейса
+        OnGameUi?.Invoke(Score, PlayerShip.GetPosition(), PlayerShip.GetRotation(), PlayerShip.GetVelosity().magnitude, PlayerShip.Health, PlayerShip.LaserCount, PlayerShip.LaserReload, Active);
     }
     public void GameEnd()
     {
         Active = false;
     }
 
-    //main spawn new asteroids Functions
-    void SpawnAsteroids()
+
+    //-------------------------------
+    // Функции для спавна противкников
+    //-------------------------------
+    private void SpawnAsteroids()
     {
         if (Random.Range(0, 100) < 50)
         {
@@ -94,20 +90,26 @@ public class Core
             SpawnNewAsteroid(true);
         }
     }
-    //main spawn EnemyShip Functions
-    void SpawnNewEnemyShip()
+    private void SpawnNewEnemyShip()
     {
         if (EnemyShip != null)
             return;
 
-        EnemyShip = new ObjectTransform(new Vector2(
-            -20, Random.Range(-20, 1020)),
-            90
-            );
+        EnemyShip = new Enemy( new Vector2(-20, Random.Range(-20, 1020)) );
         OnNewEnemy?.Invoke();
     }
-    //main destroy EnemyShip Functions
-    void DestroyEnemyShip()
+
+
+    //-------------------------------
+    // Функции уничтожения противников
+    //-------------------------------
+    private void DestroyAsteroid(int i)
+    {
+        Score += 10;
+        Asteroids.RemoveAt(i);
+        OnDeadAsteroid?.Invoke(i);
+    }
+    private void DestroyEnemyShip()
     {
         Score += 25;
         EnemyShip = null;
@@ -115,23 +117,25 @@ public class Core
     }
 
 
-    //математическая функция для нахождения минимальной дистанции до прямой линии
-    float FindNearestPointOnLine(Vector3 origin, Vector3 end, Vector3 point)
-    {
-        //Get heading
+
+    //-------------------------------
+    // Функции для выстрелок игрока
+    //-------------------------------
+    private float FindNearestPointOnLine(Vector3 origin, Vector3 end, Vector3 point)
+    { 
+        //математическая функция для нахождения минимальной дистанции до прямой линии
+
         Vector3 heading = (end - origin);
         float magnitudeMax = heading.magnitude;
         heading.Normalize();
 
-        //Do projection from the point but clamp it
         Vector3 lhs = point - origin;
         float dotP = Vector3.Dot(lhs, heading);
         dotP = Mathf.Clamp(dotP, 0f, magnitudeMax);
         return Vector3.Distance(point, origin + heading * dotP);
     }
-    void SpawnLaser()
+    private void SpawnLaser()
     {
-        OnNewLaser?.Invoke();
         float LaserAngle = 80;
 
         if (EnemyShip != null && 
@@ -143,7 +147,6 @@ public class Core
 
         for (int i = 0; i < Asteroids.Count; i++)
         {
-            Debug.Log(FindNearestPointOnLine(PlayerShip.GetPosition(), PlayerShip.GetPosition() + PlayerShip.GetDirection() * 1000, Asteroids[i].GetPosition()));
             if (FindNearestPointOnLine(PlayerShip.GetPosition(), PlayerShip.GetPosition() + PlayerShip.GetDirection() * 1000, Asteroids[i].GetPosition()) < LaserAngle)
             {
                 DestroyAsteroid(i);
@@ -151,7 +154,7 @@ public class Core
             }
         }
     }
-    void SpawnNewBullet()
+    private void SpawnNewBullet()
     {
         if (Bullets.Count >= 5)
         {
@@ -161,13 +164,13 @@ public class Core
 
         Bullet NewBullet = new Bullet(PlayerShip.GetPosition(), PlayerShip.GetRotation(), 200, true);
         Bullets.Add(NewBullet);
-
-        OnNewBullet?.Invoke();
     }
 
 
-    //spawn new asteroids subFunctions
-    void SpawnNewAsteroid(bool Big)
+    //-------------------------------
+    // Подфункции для спавка астероидов
+    //-------------------------------
+    private void SpawnNewAsteroid(bool Big)
     {
         float spd = Big ? Random.Range(10, 30) : Random.Range(30, 50);
         Asteroid newAsteroid = new Asteroid(new Vector2(
@@ -179,7 +182,7 @@ public class Core
         Asteroids.Add(newAsteroid);
         OnNewAsteroid?.Invoke(Big);
     }
-    void SpawnNewAsteroid(bool Big, Vector2 pos)
+    private void SpawnNewAsteroid(bool Big, Vector2 pos)
     {
         float spd = Big ? Random.Range(10, 30) : Random.Range(30, 50);
         Asteroid newAsteroid = new Asteroid(
@@ -192,47 +195,19 @@ public class Core
         OnNewAsteroid?.Invoke(Big);
     }
 
-    //destroy asteroid with i Id
-    void DestroyAsteroid(int i)
+
+
+    //-------------------------------
+    // Функции для обновления обьектов симуляции
+    //-------------------------------
+    private void UpdateBullets()
     {
-        Score += 10;
-        OnDeadAsteroid?.Invoke(i);
-        Asteroids.RemoveAt(i);
-    }
-
-
-    //subUpdates for objects
-    void UpdatePlayer(float DeltaTime)
-    {
-        //Check input keybd buttons
-        Vector2 Input = PlayerInput.GetMovementInput();
-        PlayerShip.AddSpeed(Input.x);
-        PlayerShip.AddRotation(Input.y * 3);
-        PlayerShip.UpdatePos();
-
-        //Decreace Ship Reload Timers
-        PlayerShip.DecreaceDelay(DeltaTime);
-
-        if (PlayerInput.IsShoot() && PlayerShip.ShotDelay <= 0)
-        {
-            PlayerShip.Shot();
-            SpawnNewBullet();
-        }
-        if (PlayerInput.IsLaserShoot() && PlayerShip.LaserDelay <= 0)
-        {
-            PlayerShip.ShotLaser();
-            SpawnLaser();
-        }
-    }
-    void UpdateBullets()
-    {
-        //Update position foreach Bullet and check distances to Objects
+        //Обновляет позицию каждой пули, и проверяет дистанцию до каждого астероида
         for (int i = 0; i < Bullets.Count; i++)
         {
-            //Update position
-            Bullets[i].UpdatePos();
+            Bullets[i].UpdatePosition();
 
-            //Check distances to Enemy ship
+            //Проверяет дистанцию до фражесского корабля, Если он есть
             if (EnemyShip != null && Vector3.Distance(Bullets[i].GetPosition(), EnemyShip.GetPosition()) < 15)
             {
                 Bullets.RemoveAt(i);
@@ -242,13 +217,13 @@ public class Core
                 continue;
             }
 
-            //Check distances to Asteroids
+            //Проверяет дистанцию до каждого астероида
             for (int a = 0; a < Asteroids.Count; a++)
             {
                 float range = Asteroids[a].BigAsteroid ? 20 : 40;
                 if (Vector3.Distance(Bullets[i].GetPosition(), Asteroids[a].GetPosition()) < range)
                 {
-                    Debug.Log(Asteroids[a].BigAsteroid);
+                    //Если астероид большой, он раскалывается 
                     if (Asteroids[a].BigAsteroid)
                     {
                         SpawnNewAsteroid(false, Asteroids[a].GetPosition());
@@ -265,12 +240,13 @@ public class Core
             }
         }
     }
-    void UpdateAsteroids()
+    private void UpdateAsteroids()
     {
-        //Update position foreach Small Asteroid and check distances to Player ship
+        //Обновляет позицию каждого астероида, и проверяет дистанцию до корабля игрока
         for (int i = 0; i < Asteroids.Count; i++)
         {
-            Asteroids[i].UpdatePos();
+            Asteroids[i].UpdatePosition();
+
             float range = Asteroids[i].BigAsteroid ? 20 : 40;
             if (Vector3.Distance(PlayerShip.GetPosition(), Asteroids[i].GetPosition()) < range)
             {
@@ -283,14 +259,11 @@ public class Core
             }
         }
     }
-    void UpdateEnemyShip(float TimeSpent)
+    private void UpdateEnemyShip()
     {
         if (EnemyShip != null)
         {
-            //Move Emeny ship in to Player ship
-            EnemyShip.Move = Vector3.Lerp(EnemyShip.Move, (PlayerShip.GetPosition() - EnemyShip.GetPosition()).normalized * 80, TimeSpent);
-            EnemyShip.UpdatePos();
-
+            EnemyShip.MoveTo(PlayerShip.GetPosition());
             //Check Distance
             if(Vector3.Distance(PlayerShip.GetPosition(), EnemyShip.GetPosition()) < 12)
             {
